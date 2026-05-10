@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
+import { cookies } from 'next/headers';
+import { decrypt } from '@/lib/auth';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -10,17 +12,22 @@ export const metadata: Metadata = {
   description: 'Projekt z Zaawansowanych Architektur Baz Danych',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const cookie = cookieStore.get('session')?.value;
+
+  const session = await decrypt(cookie);
+
   return (
     <html lang="pl">
-      <body className={`${inter.className} bg-gray-50 min-h-screen`}>
-        <Navbar />
+      <body className={`${inter.className} bg-zinc-50 min-h-screen text-zinc-900`}>
+        <Navbar session={session} />
 
-        <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+        <main className="min-h-[calc(100vh-4rem)]">
           {children}
         </main>
       </body>
