@@ -303,16 +303,22 @@ SELECT
   v.Base_Price_Per_Day,
   vc.Name  AS category,
   b.Name   AS branch, b.City AS city,
-  JSON_OBJECTAGG(
-    a.Name,
-    COALESCE(va.Value_String, CAST(va.Value_Number AS CHAR), CAST(va.Value_Date AS CHAR), IF(va.Value_Bool, 'true','false'))
+  COALESCE(
+    (
+      SELECT JSON_OBJECTAGG(
+        attr.Name, 
+        COALESCE(v_attr.Value_String, CAST(v_attr.Value_Number AS CHAR), CAST(v_attr.Value_Date AS CHAR), IF(v_attr.Value_Bool, 'true','false'))
+      )
+      FROM Vehicle_Attribute v_attr
+      JOIN Attributes attr ON v_attr.Attribute_Id = attr.Id
+      WHERE v_attr.Vehicle_Id = v.Id
+    ),
+    JSON_OBJECT()
   ) AS attributes,
   (SELECT JSON_ARRAYAGG(JSON_OBJECT('path', Image_Path, 'main', Is_Main)) FROM Vehicle_Images WHERE Vehicle_Id = v.Id) AS images
 FROM Vehicles v
 JOIN Vehicle_Categories vc ON v.Category_Id = vc.Id
 JOIN Branches b            ON v.Branch_Id   = b.Id
-LEFT JOIN Vehicle_Attribute va ON va.Vehicle_Id   = v.Id
-LEFT JOIN Attributes a         ON a.Id = va.Attribute_Id
 GROUP BY v.Id, v.VIN, v.License_Plate, v.Status, v.Base_Price_Per_Day, vc.Name, b.Name, b.City;
 
 CREATE OR REPLACE VIEW view_monthly_summary AS
