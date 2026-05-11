@@ -10,7 +10,8 @@ export async function POST(
     try {
         const { id } = await params;
 
-        const cookie = cookies().get('session')?.value;
+        const cookieStore = await cookies();
+        const cookie = cookieStore.get('session')?.value;
         const session = await decrypt(cookie);
 
         if (!session || !session.userId) {

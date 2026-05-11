@@ -149,7 +149,7 @@ END$$
 -- ── PROCEDURA: return_vehicle ─────────────────────────────────
 CREATE PROCEDURE return_vehicle(
   IN  p_reservation_id  INT,
-  IN  p_actual_end      DATETIME,
+  IN  p_additional_fee  DECIMAL(10,2),
   OUT p_final_cost      DECIMAL(10,2),
   OUT p_status_msg      VARCHAR(255)
 )
@@ -158,9 +158,7 @@ BEGIN
   DECLARE v_planned_end  DATETIME;
   DECLARE v_start        DATETIME;
   DECLARE v_promo_id     INT;
-  DECLARE v_penalty      DECIMAL(10,2) DEFAULT 0;
-  DECLARE v_late_days    INT DEFAULT 0;
-  DECLARE v_rate_per_day DECIMAL(10,2);
+  DECLARE v_dropoff      INT;
   DECLARE EXIT HANDLER FOR SQLEXCEPTION
   BEGIN
     ROLLBACK;
@@ -169,8 +167,8 @@ BEGIN
 
   START TRANSACTION;
 
-  SELECT Vehicle_Id, Start_Date, End_Date, Promo_Id
-  INTO v_vehicle_id, v_start, v_planned_end, v_promo_id
+  SELECT Vehicle_Id, Start_Date, End_Date, Promo_Id, DropOff_Branch_Id
+  INTO v_vehicle_id, v_start, v_planned_end, v_promo_id, v_dropoff
   FROM Reservations
   WHERE Id = p_reservation_id AND Status = 'active'
   FOR UPDATE;
@@ -181,21 +179,17 @@ BEGIN
   ELSE
     SET p_final_cost = calculate_final_rate(v_vehicle_id, v_start, v_planned_end, v_promo_id);
 
-    IF p_actual_end > v_planned_end THEN
-      SET v_late_days = DATEDIFF(p_actual_end, v_planned_end);
-      SELECT Config_Value INTO v_rate_per_day FROM System_Config WHERE Config_Key = 'late_penalty_per_day';
-      SET v_penalty = v_late_days * v_rate_per_day;
-      SET p_final_cost = p_final_cost + v_penalty;
-
-      INSERT INTO Payments (Reservation_Id, Amount, Payment_Type) VALUES (p_reservation_id, v_penalty, 'Penalty');
+    IF p_additional_fee > 0 THEN
+      SET p_final_cost = p_final_cost + p_additional_fee;
+      INSERT INTO Payments (Reservation_Id, Amount, Payment_Type) VALUES (p_reservation_id, p_additional_fee, 'Penalty');
     END IF;
 
     UPDATE Reservations SET Status = 'completed', Final_Cost = p_final_cost WHERE Id = p_reservation_id;
-    UPDATE Vehicles SET Status = 'available' WHERE Id = v_vehicle_id;
+    UPDATE Vehicles SET Status = 'available', Branch_Id = v_dropoff WHERE Id = v_vehicle_id;
     INSERT INTO Payments (Reservation_Id, Amount, Payment_Type) VALUES (p_reservation_id, p_final_cost, 'Final');
 
     COMMIT;
-    SET p_status_msg = IF(v_penalty > 0, CONCAT('OK. Kara za spóźnienie (', v_late_days, ' dni): ', v_penalty, ' PLN'), 'OK');
+    SET p_status_msg = 'OK';
   END IF;
 END$$
 
@@ -302,7 +296,7 @@ SELECT
   v.Id, v.VIN, v.License_Plate, v.Status,
   v.Base_Price_Per_Day,
   vc.Name  AS category,
-  b.Name   AS branch, b.City AS city,
+  v.Branch_Id, b.Name AS branch, b.City AS city,
   COALESCE(
     (
       SELECT JSON_OBJECTAGG(

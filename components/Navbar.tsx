@@ -25,14 +25,14 @@ export function Navbar({ session }: { session: any }) {
                             <Button variant="ghost" className="text-zinc-300 hover:text-white hover:bg-zinc-800" asChild>
                                 <Link href="/fleet">Nasza Flota</Link>
                             </Button>
-                            {session && (
+                            {session?.role === 'client' && (
                                 <Button variant="ghost" className="text-zinc-300 hover:text-white hover:bg-zinc-800" asChild>
                                     <Link href="/reservations">Moje Rezerwacje</Link>
                                 </Button>
                             )}
-                            {session?.role === 'admin' && (
+                            {['admin', 'employee'].includes(session?.role) && (
                                 <Button variant="ghost" className="text-zinc-300 hover:text-white hover:bg-zinc-800" asChild>
-                                    <Link href="/admin">Panel Admina</Link>
+                                    <Link href="/admin">Panel Pracownika</Link>
                                 </Button>
                             )}
                         </div>
