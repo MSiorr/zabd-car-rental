@@ -107,7 +107,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
                 <select
                     value={val}
                     onChange={e => handleAttrChange(attr.Id, e.target.value)}
-                    className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                 >
                     <option value="">Wybierz...</option>
                     {options.map(o => <option key={o} value={o}>{o}</option>)}
@@ -155,7 +155,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
             )}
 
             <div className="bg-white rounded-xl border p-6 shadow-sm space-y-5">
-                <h2 className="text-lg font-bold text-zinc-800 border-b pb-3">Dane podstawowe</h2>
+                <h2 className="text-lg font-bold text-slate-800 border-b pb-3">Dane podstawowe</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                         <Label>VIN *</Label>
@@ -175,7 +175,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
                             value={categoryId}
                             onChange={e => setCategoryId(e.target.value)}
                             required
-                            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
                             <option value="" disabled>Wybierz...</option>
                             {categories.map(c => (
@@ -189,7 +189,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
                             value={branchId}
                             onChange={e => setBranchId(e.target.value)}
                             required
-                            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
                             <option value="" disabled>Wybierz...</option>
                             {branches.map(b => (
@@ -202,7 +202,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
                         <select
                             value={status}
                             onChange={e => setStatus(e.target.value)}
-                            className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
                             {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
@@ -212,11 +212,11 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
 
             {attrDefs.length > 0 && (
                 <div className="bg-white rounded-xl border p-6 shadow-sm space-y-5">
-                    <h2 className="text-lg font-bold text-zinc-800 border-b pb-3">Atrybuty pojazdu</h2>
+                    <h2 className="text-lg font-bold text-slate-800 border-b pb-3">Atrybuty pojazdu</h2>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         {attrDefs.map(attr => (
                             <div key={attr.Id} className="space-y-2">
-                                <Label>{attr.Name} <span className="text-zinc-400 text-xs font-normal">({attr.Type})</span></Label>
+                                <Label>{attr.Name} <span className="text-slate-400 text-xs font-normal">({attr.Type})</span></Label>
                                 {renderAttrInput(attr)}
                             </div>
                         ))}
@@ -228,7 +228,7 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
                 <Button type="button" variant="outline" onClick={() => router.push('/admin/vehicles')}>
                     Anuluj
                 </Button>
-                <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-500 min-w-32">
+                <Button type="submit" disabled={loading} className="bg-red-600 text-white cursor-pointer min-w-32">
                     {loading ? 'Zapisuję...' : isEdit ? 'Zapisz zmiany' : 'Dodaj pojazd'}
                 </Button>
             </div>

@@ -26,15 +26,16 @@ export default function EditVehiclePage({ params }: { params: Promise<{ id: stri
     }, [id]);
 
     if (error) return <div className="text-red-600 font-bold p-8">{error}</div>;
-    if (!data) return <div className="text-zinc-500 p-8">Ładowanie...</div>;
+    if (!data) return <div className="text-slate-500 p-8">Ładowanie...</div>;
 
     const { vehicle, attrMap } = data;
 
     return (
         <div>
-            <h1 className="text-3xl font-bold text-zinc-800 mb-8 border-b pb-4">
-                Edytuj pojazd #{id}
-            </h1>
+            <div className="mb-8 border-b border-slate-100 pb-6">
+                <h1 className="text-2xl font-black text-slate-900">Edytuj pojazd #{id}</h1>
+                <p className="text-slate-500 text-sm mt-1">Zmodyfikuj dane i zapisz zmiany.</p>
+            </div>
             <VehicleForm
                 vehicleId={Number(id)}
                 initialData={{

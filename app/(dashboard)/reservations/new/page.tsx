@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Car } from 'lucide-react';
 
 interface Branch {
     Id: number;
@@ -27,117 +28,123 @@ export default function NewReservationPage() {
     const searchParams = useSearchParams();
     const vehicleIdStr = searchParams.get('vehicleId');
     const vehicleId = vehicleIdStr ? parseInt(vehicleIdStr, 10) : null;
+    const preStartDate = searchParams.get('startDate') ?? '';
+    const preEndDate   = searchParams.get('endDate')   ?? '';
 
     const [vehicle, setVehicle] = useState<Vehicle | null>(null);
     const [branches, setBranches] = useState<Branch[]>([]);
-
     const [pickupId, setPickupId] = useState('');
     const [dropoffId, setDropoffId] = useState('');
-    const [startDate, setStartDate] = useState('');
-    const [endDate, setEndDate] = useState('');
+    const [startDate, setStartDate] = useState(preStartDate);
+    const [endDate, setEndDate] = useState(preEndDate);
     const [promoCode, setPromoCode] = useState('');
-
+    const [debouncedPromo, setDebouncedPromo] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-
-    // Kalkulacja na froncie (poglądowa)
     const [estimatedDays, setEstimatedDays] = useState(0);
-    const [estimatedCost, setEstimatedCost] = useState(0);
+    const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
+    const [estimateLoading, setEstimateLoading] = useState(false);
+    const [promoStatus, setPromoStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
+    const [promoError, setPromoError] = useState('');
 
     useEffect(() => {
-        if (!vehicleId) {
-            router.push('/fleet');
+        if (!vehicleId) { router.push('/fleet'); return; }
+        Promise.all([
+            fetch(`/api/vehicles/${vehicleId}`),
+            fetch('/api/branches')
+        ]).then(async ([vehRes, branchRes]) => {
+            if (vehRes.ok) {
+                const v = await vehRes.json();
+                setVehicle(v);
+                if (v.Branch_Id) setPickupId(v.Branch_Id.toString());
+            }
+            if (branchRes.ok) setBranches(await branchRes.json());
+        }).catch(console.error);
+    }, [vehicleId, router]);
+
+    // Debounce promo code — wait 600ms after user stops typing
+    useEffect(() => {
+        const t = setTimeout(() => setDebouncedPromo(promoCode), 600);
+        return () => clearTimeout(t);
+    }, [promoCode]);
+
+    // Reset promo status when user is still typing
+    useEffect(() => {
+        if (promoCode !== debouncedPromo) {
+            setPromoStatus('idle');
+            setPromoError('');
+        }
+    }, [promoCode, debouncedPromo]);
+
+    // Fetch real estimated cost from server (includes multipliers, season, promo)
+    useEffect(() => {
+        if (!vehicleId || !startDate || !endDate) {
+            setEstimatedDays(0);
+            setEstimatedCost(null);
+            setPromoStatus('idle');
+            setPromoError('');
             return;
         }
 
-        const fetchData = async () => {
-            try {
-                const [vehRes, branchRes] = await Promise.all([
-                    fetch(`/api/vehicles/${vehicleId}`),
-                    fetch('/api/branches')
-                ]);
+        setEstimateLoading(true);
+        const params = new URLSearchParams({
+            vehicleId: String(vehicleId),
+            startDate: `${startDate} 12:00:00`,
+            endDate:   `${endDate} 12:00:00`,
+        });
+        if (debouncedPromo) params.set('promoCode', debouncedPromo);
 
-                if (vehRes.ok) {
-                    const v = await vehRes.json();
-                    setVehicle(v);
-                    if (v.Branch_Id) {
-                        setPickupId(v.Branch_Id.toString());
+        fetch(`/api/reservations/estimate?${params}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.estimatedCost !== undefined) {
+                    setEstimatedCost(parseFloat(data.estimatedCost));
+                    setEstimatedDays(data.days);
+                    if (debouncedPromo) {
+                        setPromoStatus(data.promoApplied ? 'valid' : 'invalid');
+                        setPromoError(data.promoError || '');
+                    } else {
+                        setPromoStatus('idle');
+                        setPromoError('');
                     }
                 }
-                if (branchRes.ok) {
-                    setBranches(await branchRes.json());
-                }
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        fetchData();
-    }, [vehicleId, router]);
-
-    useEffect(() => {
-        if (startDate && endDate && vehicle) {
-            const sDate = new Date(startDate);
-            const eDate = new Date(endDate);
-            const msDiff = eDate.getTime() - sDate.getTime();
-            const days = Math.ceil(msDiff / (1000 * 3600 * 24));
-
-            if (days >= 0) {
-                // Minimalnie pobieramy za 1 dzień
-                const billableDays = days === 0 ? 1 : days;
-                setEstimatedDays(billableDays);
-                setEstimatedCost(billableDays * parseFloat(vehicle.Base_Price_Per_Day));
-            } else {
-                setEstimatedDays(0);
-                setEstimatedCost(0);
-            }
-        } else {
-            setEstimatedDays(0);
-            setEstimatedCost(0);
-        }
-    }, [startDate, endDate, vehicle]);
+            })
+            .catch(() => {})
+            .finally(() => setEstimateLoading(false));
+    }, [vehicleId, startDate, endDate, debouncedPromo]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError('');
-
         if (!pickupId || !dropoffId || !startDate || !endDate) {
             setError('Wypełnij wszystkie wymagane pola (daty i oddziały).');
             return;
         }
-
         if (estimatedDays <= 0) {
             setError('Data zwrotu nie może być wcześniejsza niż data odbioru.');
             return;
         }
-
+        if (promoCode && promoStatus === 'invalid') {
+            setError('Kod promocyjny jest nieprawidłowy lub wygasł.');
+            return;
+        }
         setLoading(true);
-
         try {
             const payload: any = {
                 vehicleId,
                 pickupId: parseInt(pickupId, 10),
                 dropoffId: parseInt(dropoffId, 10),
-                startDate: `${startDate} 12:00:00`, // Ustawienie konkretnej godziny domyślnie
+                startDate: `${startDate} 12:00:00`,
                 endDate: `${endDate} 12:00:00`,
             };
-
-            if (promoCode) {
-                payload.promoCode = promoCode;
-            }
-
+            if (promoCode) payload.promoCode = promoCode;
             const res = await fetch('/api/reservations', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload),
             });
-
             const data = await res.json();
-
-            if (!res.ok) {
-                throw new Error(data.error || 'Błąd podczas tworzenia rezerwacji');
-            }
-
-            // Po udanej rezerwacji - przekierowanie do płatności
+            if (!res.ok) throw new Error(data.error || 'Błąd podczas tworzenia rezerwacji');
             router.push(`/reservations/payment/${data.reservationId}`);
         } catch (err: any) {
             setError(err.message);
@@ -148,65 +155,65 @@ export default function NewReservationPage() {
 
     if (!vehicleId) return null;
 
+    const selectCls = "flex h-12 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400 transition-shadow";
+    const isPromoTyping = promoCode !== debouncedPromo && promoCode.length > 0;
+
     return (
         <div className="container mx-auto p-4 py-12 max-w-6xl">
-            <h1 className="text-3xl font-extrabold mb-8 text-zinc-900 border-b pb-4">Nowa Rezerwacja</h1>
+            <div className="mb-8 pb-6 border-b border-slate-100">
+                <h1 className="text-3xl font-black text-slate-900">Nowa Rezerwacja</h1>
+                <p className="text-slate-500 text-sm mt-1">Wypełnij szczegóły wynajmu i przejdź do płatności.</p>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                {/* Formularz - Lewa Strona */}
-                <div className="lg:col-span-2 bg-white rounded-2xl border p-8 shadow-sm">
-                    <h2 className="text-xl font-bold mb-6">Szczegóły wynajmu</h2>
+                {/* Form */}
+                <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-100 p-8 shadow-sm">
+                    <h2 className="text-lg font-bold text-slate-900 mb-6">Szczegóły wynajmu</h2>
 
                     {error && (
-                        <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-6 border border-red-100 flex items-start gap-3">
-                            <span className="text-xl">⚠️</span>
-                            <div>
-                                <p className="font-bold">Nie udało się złożyć rezerwacji</p>
-                                <p className="text-sm mt-1">{error}</p>
-                            </div>
+                        <div className="bg-red-50 text-red-600 p-4 rounded-xl mb-6 border border-red-100 text-sm">
+                            <p className="font-bold mb-1">Nie udało się złożyć rezerwacji</p>
+                            <p>{error}</p>
                         </div>
                     )}
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div className="space-y-3">
-                                <Label htmlFor="pickup" className="font-semibold text-zinc-700">Oddział odbioru <span className="text-red-500">*</span></Label>
+                            <div className="space-y-2">
+                                <Label className="font-semibold text-slate-700">Oddział odbioru <span className="text-red-500">*</span></Label>
                                 <select
-                                    id="pickup"
-                                    className="flex h-12 w-full rounded-lg border border-zinc-200 bg-zinc-100 px-4 py-2 text-sm text-zinc-500 cursor-not-allowed focus:outline-none transition-shadow"
+                                    className={`${selectCls} bg-slate-50 text-slate-500 cursor-not-allowed`}
                                     value={pickupId}
                                     disabled
                                     required
                                 >
                                     <option value="" disabled>Wybierz miasto odbioru...</option>
                                     {branches.map(b => (
-                                        <option key={b.Id} value={b.Id}>{b.City} - {b.Name}</option>
+                                        <option key={b.Id} value={b.Id}>{b.City} — {b.Name}</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div className="space-y-3">
-                                <Label htmlFor="dropoff" className="font-semibold text-zinc-700">Oddział zwrotu <span className="text-red-500">*</span></Label>
+                            <div className="space-y-2">
+                                <Label className="font-semibold text-slate-700">Oddział zwrotu <span className="text-red-500">*</span></Label>
                                 <select
-                                    id="dropoff"
-                                    className="flex h-12 w-full rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-shadow"
+                                    className={selectCls}
                                     value={dropoffId}
                                     onChange={(e) => setDropoffId(e.target.value)}
                                     required
                                 >
                                     <option value="" disabled>Wybierz miasto zwrotu...</option>
                                     {branches.map(b => (
-                                        <option key={b.Id} value={b.Id}>{b.City} - {b.Name}</option>
+                                        <option key={b.Id} value={b.Id}>{b.City} — {b.Name}</option>
                                     ))}
                                 </select>
                             </div>
 
-                            <div className="space-y-3">
-                                <Label htmlFor="startDate" className="font-semibold text-zinc-700">Data odbioru <span className="text-red-500">*</span></Label>
+                            <div className="space-y-2">
+                                <Label className="font-semibold text-slate-700">Data odbioru <span className="text-red-500">*</span></Label>
                                 <Input
-                                    id="startDate"
                                     type="date"
-                                    className="h-12 border-zinc-200 rounded-lg px-4"
+                                    className="h-12 border-slate-200 rounded-lg px-4 focus:ring-red-500/30 focus:border-red-400"
                                     value={startDate}
                                     min={new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setStartDate(e.target.value)}
@@ -214,12 +221,11 @@ export default function NewReservationPage() {
                                 />
                             </div>
 
-                            <div className="space-y-3">
-                                <Label htmlFor="endDate" className="font-semibold text-zinc-700">Data zwrotu <span className="text-red-500">*</span></Label>
+                            <div className="space-y-2">
+                                <Label className="font-semibold text-slate-700">Data zwrotu <span className="text-red-500">*</span></Label>
                                 <Input
-                                    id="endDate"
                                     type="date"
-                                    className="h-12 border-zinc-200 rounded-lg px-4"
+                                    className="h-12 border-slate-200 rounded-lg px-4 focus:ring-red-500/30 focus:border-red-400"
                                     value={endDate}
                                     min={startDate || new Date().toISOString().split('T')[0]}
                                     onChange={(e) => setEndDate(e.target.value)}
@@ -227,76 +233,108 @@ export default function NewReservationPage() {
                                 />
                             </div>
 
-                            <div className="space-y-3 md:col-span-2">
-                                <Label htmlFor="promoCode" className="font-semibold text-zinc-700">Kod Promocyjny <span className="text-zinc-400 font-normal text-xs ml-2">(Opcjonalnie)</span></Label>
-                                <Input
-                                    id="promoCode"
-                                    type="text"
-                                    placeholder="np. LATO2026"
-                                    className="h-12 border-zinc-200 rounded-lg px-4 w-full md:w-1/2 uppercase"
-                                    value={promoCode}
-                                    onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                                />
+                            <div className="space-y-2 md:col-span-2">
+                                <Label className="font-semibold text-slate-700">
+                                    Kod Promocyjny
+                                    <span className="text-slate-400 font-normal text-xs ml-2">(Opcjonalnie)</span>
+                                </Label>
+                                <div className="flex items-center gap-3">
+                                    <Input
+                                        type="text"
+                                        placeholder="np. LATO2026"
+                                        className={`h-12 rounded-lg px-4 w-full md:w-1/2 uppercase transition-colors ${
+                                            promoStatus === 'valid'   ? 'border-emerald-400 focus:ring-emerald-500/30 focus:border-emerald-400' :
+                                            promoStatus === 'invalid' ? 'border-red-300 focus:ring-red-500/30 focus:border-red-400' :
+                                            'border-slate-200 focus:ring-red-500/30 focus:border-red-400'
+                                        }`}
+                                        value={promoCode}
+                                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                                    />
+                                    {isPromoTyping && (
+                                        <span className="text-xs text-slate-400">Weryfikacja...</span>
+                                    )}
+                                    {!isPromoTyping && promoStatus === 'valid' && (
+                                        <span className="text-xs font-semibold text-emerald-600">Kod aktywny</span>
+                                    )}
+                                    {!isPromoTyping && promoStatus === 'invalid' && (
+                                        <span className="text-xs font-semibold text-red-500">{promoError || 'Nieprawidłowy kod'}</span>
+                                    )}
+                                </div>
                             </div>
                         </div>
 
-                        <div className="pt-6 mt-6 border-t border-zinc-100 flex justify-end">
-                            <Button type="submit" size="lg" className="w-full md:w-auto h-14 px-10 text-lg bg-blue-600 hover:bg-blue-700 shadow-md" disabled={loading}>
+                        <div className="pt-6 mt-2 border-t border-slate-100 flex justify-end">
+                            <Button
+                                type="submit"
+                                size="lg"
+                                className="w-full md:w-auto h-14 px-10 text-lg bg-red-600 text-white font-bold cursor-pointer shadow-sm"
+                                disabled={loading || isPromoTyping}
+                            >
                                 {loading ? 'Przetwarzanie...' : 'Przejdź do kasy'}
                             </Button>
                         </div>
                     </form>
                 </div>
 
-                {/* Podsumowanie - Prawa Strona */}
+                {/* Summary sidebar */}
                 <div className="lg:col-span-1">
-                    <div className="bg-zinc-50 rounded-2xl border border-zinc-200 p-6 sticky top-8">
-                        <h2 className="text-xl font-bold mb-4 text-zinc-900 border-b border-zinc-200 pb-3">Podsumowanie</h2>
+                    <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm sticky top-8">
+                        <h2 className="text-lg font-bold text-slate-900 mb-5 pb-4 border-b border-slate-100">Podsumowanie</h2>
 
                         {vehicle ? (
                             <>
-                                <div className="mb-6 bg-white p-4 rounded-xl shadow-sm border border-zinc-100">
-                                    <div className="text-4xl aspect-[16/9] flex items-center justify-center bg-zinc-50 rounded-lg border border-zinc-100 mb-4 shadow-inner">
-                                        🚗
+                                <div className="mb-5 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                    <div className="aspect-[16/9] flex items-center justify-center bg-white rounded-lg border border-slate-100 mb-4 shadow-inner">
+                                        <Car className="w-16 h-16 text-slate-300" />
                                     </div>
-                                    <h3 className="font-extrabold text-xl text-zinc-900">{vehicle.attributes?.Marka || 'Pojazd'} {vehicle.attributes?.Model || ''}</h3>
-                                    <p className="text-sm text-zinc-500 font-medium">{vehicle.category || vehicle.Category} Class</p>
-
-                                    <div className="mt-4 pt-4 border-t border-zinc-100 flex justify-between items-center">
-                                        <span className="text-zinc-500 text-sm">Cena bazowa:</span>
-                                        <span className="font-bold text-zinc-900">{vehicle.Base_Price_Per_Day} PLN/dzień</span>
+                                    <h3 className="font-black text-xl text-slate-900">
+                                        {vehicle.attributes?.Marka || 'Pojazd'} {vehicle.attributes?.Model || ''}
+                                    </h3>
+                                    <p className="text-sm text-slate-500">{vehicle.category || vehicle.Category}</p>
+                                    <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center">
+                                        <span className="text-slate-500 text-sm">Cena bazowa:</span>
+                                        <span className="font-bold text-slate-900">{vehicle.Base_Price_Per_Day} PLN/dzień</span>
                                     </div>
                                 </div>
 
-                                <div className="space-y-3 text-sm mb-6 px-1">
+                                <div className="space-y-2 text-sm mb-5 px-1">
                                     <div className="flex justify-between items-center">
-                                        <span className="text-zinc-500">Ilość dni wynajmu:</span>
-                                        <span className="font-semibold text-zinc-900">{estimatedDays}</span>
+                                        <span className="text-slate-500">Liczba dni:</span>
+                                        <span className="font-semibold text-slate-900">{estimatedDays || '—'}</span>
                                     </div>
-                                    {/* Additional info fees */}
-                                    <div className="flex justify-between items-center text-zinc-400">
-                                        <span>Podatki i opłaty (wliczone):</span>
-                                        <span>0.00 PLN</span>
+                                    {promoStatus === 'valid' && (
+                                        <div className="flex justify-between items-center text-emerald-600">
+                                            <span>Kod promocyjny:</span>
+                                            <span className="font-semibold">{promoCode} ✓</span>
+                                        </div>
+                                    )}
+                                    <div className="flex justify-between items-center text-slate-400">
+                                        <span>Podatki i opłaty:</span>
+                                        <span>wliczone</span>
                                     </div>
                                 </div>
 
-                                <div className="mt-6 pt-4 border-t-2 border-zinc-200 border-dashed">
+                                <div className="pt-4 border-t-2 border-dashed border-slate-200">
                                     <div className="flex justify-between items-end">
-                                        <div className="flex flex-col">
-                                            <span className="text-lg font-bold text-zinc-900">Całkowity koszt</span>
-                                            <span className="text-xs text-zinc-500">Szacowana kwota (brutto)</span>
+                                        <div>
+                                            <p className="font-bold text-slate-900">Całkowity koszt</p>
+                                            <p className="text-xs text-slate-400">
+                                                {estimatedCost !== null ? 'Kwota z mnożnikami i rabatem' : 'Wybierz daty'}
+                                            </p>
                                         </div>
-                                        <span className="text-3xl font-black text-blue-600">
-                                            {estimatedCost.toFixed(2)} PLN
+                                        <span className={`text-3xl font-black transition-opacity duration-200 ${estimateLoading ? 'opacity-40' : 'opacity-100'} ${estimatedCost !== null ? 'text-red-600' : 'text-slate-300'}`}>
+                                            {estimatedCost !== null
+                                                ? <>{estimatedCost.toFixed(2)} <span className="text-sm font-bold text-slate-400">PLN</span></>
+                                                : '—'}
                                         </span>
                                     </div>
                                 </div>
                             </>
                         ) : (
                             <div className="animate-pulse flex flex-col gap-4">
-                                <div className="h-48 bg-zinc-200 rounded-xl w-full"></div>
-                                <div className="h-6 bg-zinc-200 rounded w-1/2"></div>
-                                <div className="h-4 bg-zinc-200 rounded w-1/3"></div>
+                                <div className="h-40 bg-slate-100 rounded-xl w-full"></div>
+                                <div className="h-5 bg-slate-100 rounded w-1/2"></div>
+                                <div className="h-4 bg-slate-100 rounded w-1/3"></div>
                             </div>
                         )}
                     </div>

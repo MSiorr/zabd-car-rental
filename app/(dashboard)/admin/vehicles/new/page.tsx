@@ -3,7 +3,10 @@ import VehicleForm from '@/components/VehicleForm';
 export default function NewVehiclePage() {
     return (
         <div>
-            <h1 className="text-3xl font-bold text-zinc-800 mb-8 border-b pb-4">Dodaj nowy pojazd</h1>
+            <div className="mb-8 border-b border-slate-100 pb-6">
+                <h1 className="text-2xl font-black text-slate-900">Dodaj nowy pojazd</h1>
+                <p className="text-slate-500 text-sm mt-1">Uzupełnij dane podstawowe i atrybuty pojazdu.</p>
+            </div>
             <VehicleForm />
         </div>
     );

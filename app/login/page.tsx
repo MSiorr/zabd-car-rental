@@ -37,15 +37,15 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-zinc-50 py-12 px-4 sm:px-6 lg:px-8">
-            <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-zinc-100">
+        <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-slate-50 py-12 px-4 sm:px-6 lg:px-8">
+            <div className="w-full max-w-md space-y-8 bg-white p-8 rounded-2xl shadow-xl border border-slate-100">
                 <div>
-                    <h2 className="mt-6 text-center text-3xl font-extrabold text-zinc-900">
+                    <h2 className="mt-6 text-center text-3xl font-extrabold text-slate-900">
                         Zaloguj się
                     </h2>
-                    <p className="mt-2 text-center text-sm text-zinc-600">
+                    <p className="mt-2 text-center text-sm text-slate-600">
                         lub{' '}
-                        <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+                        <Link href="/register" className="font-medium text-red-600 hover:text-red-500 transition-colors">
                             załóż nowe konto
                         </Link>
                     </p>
@@ -86,7 +86,7 @@ export default function LoginPage() {
                         </div>
                     )}
 
-                    <Button type="submit" className="w-full h-11 text-base bg-blue-600 hover:bg-blue-700" disabled={isLoading}>
+                    <Button type="submit" className="w-full h-11 text-base bg-red-600 cursor-pointer" disabled={isLoading}>
                         {isLoading ? 'Logowanie...' : 'Zaloguj się'}
                     </Button>
                 </form>

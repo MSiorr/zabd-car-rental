@@ -3,10 +3,12 @@ import pool from '@/lib/db';
 
 export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
-    const city     = searchParams.get('city');
-    const category = searchParams.get('category');
-    const brand    = searchParams.get('brand');
-    const fuel     = searchParams.get('fuel');
+    const city      = searchParams.get('city');
+    const category  = searchParams.get('category');
+    const brand     = searchParams.get('brand');
+    const fuel      = searchParams.get('fuel');
+    const startDate = searchParams.get('startDate');
+    const endDate   = searchParams.get('endDate');
 
     const params: any[] = [];
 
@@ -25,6 +27,16 @@ export async function GET(request: Request) {
 
     if (city)     { query += ' AND vaf.branch_city = ?'; params.push(city); }
     if (category) { query += ' AND vaf.category = ?';    params.push(category); }
+    if (startDate && endDate) {
+        query += `
+            AND vaf.vehicle_id NOT IN (
+                SELECT Vehicle_Id FROM Reservations
+                WHERE Status IN ('pending_payment', 'confirmed', 'active')
+                AND Start_Date < ? AND End_Date > ?
+            )
+        `;
+        params.push(endDate, startDate);
+    }
 
     query += `
         GROUP BY vaf.vehicle_id, vaf.License_Plate, vaf.Base_Price_Per_Day,

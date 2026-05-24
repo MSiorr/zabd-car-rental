@@ -61,15 +61,15 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
 
     return (
         <div className="container mx-auto p-4 max-w-md py-20">
-            <div className="bg-white rounded-2xl border border-zinc-200 p-8 shadow-sm text-center">
-                <div className="bg-blue-50 text-blue-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+            <div className="bg-white rounded-2xl border border-slate-100 p-8 shadow-sm text-center">
+                <div className="bg-slate-100 text-slate-700 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                     <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
                     </svg>
                 </div>
                 <h1 className="text-2xl font-bold mb-4">Bezpieczna Płatność</h1>
                 <p className="text-muted-foreground mb-8">
-                    Kliknij przycisk poniżej, aby opłacić rezerwację nr <span className="font-bold text-zinc-900">#{reservationId}</span>. <br />
+                    Kliknij przycisk poniżej, aby opłacić rezerwację nr <span className="font-bold text-slate-900">#{reservationId}</span>. <br />
                     (To jest tylko makieta bramki płatności)
                 </p>
 
@@ -82,7 +82,7 @@ export default function PaymentPage({ params }: { params: Promise<{ id: string }
                 <Button
                     onClick={handlePayment}
                     disabled={loading}
-                    className="w-full h-12 text-lg font-semibold bg-zinc-900 hover:bg-zinc-800"
+                    className="w-full h-12 text-lg font-semibold bg-red-600 cursor-pointer"
                 >
                     {loading ? (
                         <span className="flex items-center gap-2">

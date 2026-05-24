@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { DM_Sans } from 'next/font/google';
 import './globals.css';
 import { Navbar } from '@/components/Navbar';
 import { cookies } from 'next/headers';
 import { decrypt } from '@/lib/auth';
 
-const inter = Inter({ subsets: ['latin'] });
+const dmSans = DM_Sans({ subsets: ['latin'], weight: ['400', '500', '700'] });
 
 export const metadata: Metadata = {
-  title: 'CarRental - Bazy Danych',
-  description: 'Projekt z Zaawansowanych Architektur Baz Danych',
+  title: 'PremiumRent — Wypożyczalnia samochodów',
+  description: 'Wypożycz samochód szybko i wygodnie.',
 };
 
 export default async function RootLayout({
@@ -19,14 +19,12 @@ export default async function RootLayout({
 }>) {
   const cookieStore = await cookies();
   const cookie = cookieStore.get('session')?.value;
-
   const session = await decrypt(cookie);
 
   return (
     <html lang="pl">
-      <body className={`${inter.className} bg-zinc-50 min-h-screen text-zinc-900`}>
+      <body className={`${dmSans.className} bg-slate-50 min-h-screen text-slate-900`}>
         <Navbar session={session} />
-
         <main className="min-h-[calc(100vh-4rem)]">
           {children}
         </main>

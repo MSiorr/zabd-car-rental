@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Car, ArrowLeftRight, Send, XCircle } from 'lucide-react';
 
 interface Rental {
     Id: number;
@@ -24,13 +25,30 @@ interface Rental {
     DropoffBranchName: string;
 }
 
-export default function AdminPage() {
+const STATUS_BADGES: Record<string, string> = {
+    pending_payment: 'bg-amber-100 text-amber-800 border border-amber-200',
+    confirmed:       'bg-sky-100 text-sky-800 border border-sky-200',
+    active:          'bg-violet-100 text-violet-800 border border-violet-200',
+    completed:       'bg-emerald-100 text-emerald-800 border border-emerald-200',
+    cancelled:       'bg-red-100 text-red-700 border border-red-200',
+};
+
+const STATUS_LABELS: Record<string, string> = {
+    pending_payment: 'Oczekuje na płatność',
+    confirmed:       'Potwierdzona',
+    active:          'Wydany / Aktywny',
+    completed:       'Zakończona',
+    cancelled:       'Anulowana',
+};
+
+export default function AdminRentalsPage() {
     const [rentals, setRentals] = useState<Rental[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState('');
-
-    // Modal state
     const [selectedRental, setSelectedRental] = useState<Rental | null>(null);
+    const [issueTarget, setIssueTarget] = useState<Rental | null>(null);
+    const [cancelTarget, setCancelTarget] = useState<Rental | null>(null);
+    const [isCancelling, setIsCancelling] = useState(false);
     const [additionalFee, setAdditionalFee] = useState<number>(0);
     const [isReturning, setIsReturning] = useState(false);
     const [isIssuing, setIsIssuing] = useState(false);
@@ -52,39 +70,47 @@ export default function AdminPage() {
             });
     };
 
-    useEffect(() => {
-        fetchRentals();
-    }, []);
+    useEffect(() => { fetchRentals(); }, []);
 
-    const getStatusBadge = (status: string) => {
-        switch (status) {
-            case 'pending_payment': return <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded">Oczekuje na płatność</span>;
-            case 'confirmed': return <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded">Potwierdzona</span>;
-            case 'active': return <span className="bg-purple-100 text-purple-800 text-xs font-bold px-2 py-1 rounded">Wydany / Aktywny</span>;
-            case 'completed': return <span className="bg-green-100 text-green-800 text-xs font-bold px-2 py-1 rounded">Zakończona</span>;
-            case 'cancelled': return <span className="bg-red-100 text-red-800 text-xs font-bold px-2 py-1 rounded">Anulowana</span>;
-            default: return <span className="bg-zinc-100 text-zinc-800 text-xs font-bold px-2 py-1 rounded">{status}</span>;
-        }
-    };
-
-    const handleIssue = async (rentalId: number, vehicleId: number) => {
-        if (!confirm('Na pewno chcesz wydać ten pojazd klientowi?')) return;
+    const confirmIssue = async () => {
+        if (!issueTarget) return;
         setIsIssuing(true);
         try {
             const res = await fetch('/api/admin/issue', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reservationId: rentalId, vehicleId })
+                body: JSON.stringify({ reservationId: issueTarget.Id, vehicleId: issueTarget.Vehicle_Id })
             });
             if (!res.ok) {
                 const data = await res.json();
                 throw new Error(data.error || 'Błąd wydawania');
             }
+            setIssueTarget(null);
             fetchRentals();
         } catch (err: any) {
-            alert(err.message);
+            setIssueTarget(null);
+            setError(err.message);
         } finally {
             setIsIssuing(false);
+        }
+    };
+
+    const confirmCancel = async () => {
+        if (!cancelTarget) return;
+        setIsCancelling(true);
+        try {
+            const res = await fetch(`/api/admin/rentals/${cancelTarget.Id}/cancel`, { method: 'PATCH' });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Błąd anulowania');
+            }
+            setCancelTarget(null);
+            fetchRentals();
+        } catch (err: any) {
+            setError(err.message);
+            setCancelTarget(null);
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -94,27 +120,18 @@ export default function AdminPage() {
         setIsReturning(true);
         setReturnError('');
         setReturnSuccess('');
-
         try {
             const res = await fetch('/api/return', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    reservationId: selectedRental.Id,
-                    additionalFee: additionalFee
-                })
+                body: JSON.stringify({ reservationId: selectedRental.Id, additionalFee })
             });
-
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Błąd zwrotu');
             if (data.finalCost === null && data.message.includes('Błąd')) throw new Error(data.message);
-
             setReturnSuccess(`Zwrócono pomyślnie! ${data.message} | Ostateczny koszt: ${data.finalCost} PLN`);
             fetchRentals();
-            setTimeout(() => {
-                setSelectedRental(null);
-                setReturnSuccess('');
-            }, 3000);
+            setTimeout(() => { setSelectedRental(null); setReturnSuccess(''); }, 3000);
         } catch (err: any) {
             setReturnError(err.message);
         } finally {
@@ -122,85 +139,98 @@ export default function AdminPage() {
         }
     };
 
-    if (isLoading) return <div className="text-center py-20 text-zinc-500">Trwa ładowanie panelu pracownika...</div>;
-
+    if (isLoading) return (
+        <div className="flex items-center justify-center py-32 text-slate-400">
+            <Car className="w-8 h-8 animate-pulse mr-3" /> Trwa ładowanie panelu...
+        </div>
+    );
     if (error) return <div className="text-center py-20 text-red-500 font-bold">{error}</div>;
 
     return (
-        <div>
-            <h1 className="text-3xl font-bold mb-6 border-b pb-4 text-zinc-800">Operacje na Wypożyczeniach</h1>
-
-            <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-hidden">
-                <table className="w-full text-left text-sm text-zinc-600">
-                    <thead className="bg-zinc-50 text-zinc-800 font-semibold border-b">
-                        <tr>
-                            <th className="px-4 py-3">ID / Klient</th>
-                            <th className="px-4 py-3">Pojazd</th>
-                            <th className="px-4 py-3">Data Od - Do</th>
-                            <th className="px-4 py-3">Szacowany koszt</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3 text-right">Akcja</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100">
-                        {rentals.map(r => (
-                            <tr key={r.Id} className="hover:bg-zinc-50/50 transition-colors">
-                                <td className="px-4 py-3">
-                                    <div className="font-bold text-zinc-900">#RES-{r.Id}</div>
-                                    <div className="text-xs">{r.First_Name} {r.Last_Name}</div>
-                                    <div className="text-xs text-zinc-400">{r.Driving_License}</div>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <div className="font-bold text-zinc-800">{r.Brand} {r.Model}</div>
-                                    <div className="text-xs font-mono bg-zinc-200 px-1 py-0.5 rounded inline-block mt-1">{r.License_Plate}</div>
-                                </td>
-                                <td className="px-4 py-3 text-xs">
-                                    Od: {new Date(r.Start_Date).toLocaleString()}<br />
-                                    Do: <span className="font-bold text-red-500">{new Date(r.End_Date).toLocaleString()}</span><br />
-                                    Zwrot w: <span className="text-zinc-800 font-semibold">{r.DropoffCity}</span>
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className="font-semibold text-zinc-800">{r.Estimated_Cost} PLN</span>
-                                    {r.Final_Cost && <div className="text-xs text-green-600 font-bold">Finał: {r.Final_Cost} PLN</div>}
-                                </td>
-                                <td className="px-4 py-3">
-                                    {getStatusBadge(r.Status)}
-                                </td>
-                                <td className="px-4 py-3 text-right space-x-2">
-                                    {(r.Status === 'confirmed' || r.Status === 'pending_payment') && (
-                                        <Button size="sm" variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50" onClick={() => handleIssue(r.Id, r.Vehicle_Id)} disabled={isIssuing}>
-                                            Wydaj Pojazd
-                                        </Button>
-                                    )}
-                                    {(r.Status === 'active' || r.Status === 'confirmed') && (
-                                        <Button size="sm" className="bg-emerald-600 hover:bg-emerald-500" onClick={() => {
-                                            setSelectedRental(r);
-                                            setAdditionalFee(0);
-                                        }}>
-                                            Przyjmij Zwrot
-                                        </Button>
-                                    )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
-
-            {/* Modal dla Zwrotu */}
-            {selectedRental && (
-                <div className="fixed inset-0 bg-zinc-900/50 flex items-center justify-center p-4 backdrop-blur-sm z-50">
-                    <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full">
-                        <h2 className="text-2xl font-bold mb-4 text-zinc-900">Formularz Zwrotu Pojazdu</h2>
-                        <p className="mb-4 text-sm text-zinc-600 border-b pb-4">
-                            Przyjmujesz pojazd <strong>{selectedRental.Brand} {selectedRental.Model} ({selectedRental.License_Plate})</strong> od klienta <strong>{selectedRental.First_Name} {selectedRental.Last_Name}</strong>.
-                            <br /><br />
-                            Sprawdź stan pojazdu. Jeśli auto jest opóźnione wg daty w systemie, kwota za czas doliczy się automatycznie (chyba że podasz kwotę manualnej nadpłaty w tym formularzu).
-                        </p>
-
-                        <form onSubmit={handleReturn} className="space-y-4">
+        <>
+            {/* Issue modal */}
+            {issueTarget && (
+                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm z-50">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-100">
+                        <div className="flex items-center gap-3 mb-5 pb-5 border-b border-slate-100">
+                            <div className="w-10 h-10 bg-sky-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <Send className="w-5 h-5 text-sky-600" />
+                            </div>
                             <div>
-                                <Label htmlFor="additionalFee" className="mb-1 block font-semibold">Dodatkowe opłaty (uszkodzenia, nadmierne zabrudzenie) - PLN</Label>
+                                <h2 className="text-xl font-bold text-slate-900">Wydanie pojazdu</h2>
+                                <p className="text-sm text-slate-500">
+                                    {issueTarget.Brand} {issueTarget.Model} ({issueTarget.License_Plate})
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed">
+                            Potwierdzasz wydanie pojazdu klientowi <span className="font-semibold text-slate-900">{issueTarget.First_Name} {issueTarget.Last_Name}</span>? Status rezerwacji zmieni się na <span className="font-semibold text-violet-700">Aktywny</span>.
+                        </p>
+                        <div className="flex gap-3">
+                            <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={() => setIssueTarget(null)} disabled={isIssuing}>
+                                Anuluj
+                            </Button>
+                            <Button type="button" onClick={confirmIssue} disabled={isIssuing} className="flex-1 bg-slate-800 hover:opacity-90 text-white cursor-pointer transition-opacity duration-150">
+                                {isIssuing ? 'Wydawanie...' : 'Potwierdź wydanie'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Cancel modal */}
+            {cancelTarget && (
+                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm z-50">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-100">
+                        <div className="flex items-center gap-3 mb-5 pb-5 border-b border-slate-100">
+                            <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <XCircle className="w-5 h-5 text-red-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Anulowanie rezerwacji</h2>
+                                <p className="text-sm text-slate-500">
+                                    #{cancelTarget.Id} — {cancelTarget.Brand} {cancelTarget.Model} ({cancelTarget.License_Plate})
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-6 bg-red-50 p-4 rounded-xl border border-red-100 leading-relaxed">
+                            Rezerwacja klienta <span className="font-semibold text-slate-900">{cancelTarget.First_Name} {cancelTarget.Last_Name}</span> zostanie anulowana. Operacja jest nieodwracalna.
+                        </p>
+                        <div className="flex gap-3">
+                            <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={() => setCancelTarget(null)} disabled={isCancelling}>
+                                Wróć
+                            </Button>
+                            <Button type="button" onClick={confirmCancel} disabled={isCancelling} className="flex-1 bg-red-600 hover:opacity-90 text-white cursor-pointer transition-opacity duration-150">
+                                {isCancelling ? 'Anulowanie...' : 'Anuluj rezerwację'}
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Return modal */}
+            {selectedRental && (
+                <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 backdrop-blur-sm z-50">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full border border-slate-100">
+                        <div className="flex items-center gap-3 mb-5 pb-5 border-b border-slate-100">
+                            <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center flex-shrink-0">
+                                <ArrowLeftRight className="w-5 h-5 text-emerald-600" />
+                            </div>
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-900">Formularz Zwrotu Pojazdu</h2>
+                                <p className="text-sm text-slate-500">
+                                    {selectedRental.Brand} {selectedRental.Model} ({selectedRental.License_Plate}) — {selectedRental.First_Name} {selectedRental.Last_Name}
+                                </p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed">
+                            Sprawdź stan pojazdu. Opóźnienia liczą się automatycznie. Wpisz dodatkową kwotę tylko za uszkodzenia lub inne nieprzewidziane koszty.
+                        </p>
+                        <form onSubmit={handleReturn} className="space-y-5">
+                            <div>
+                                <Label htmlFor="additionalFee" className="mb-2 block font-semibold text-slate-700">
+                                    Dodatkowe opłaty (PLN)
+                                </Label>
                                 <Input
                                     id="additionalFee"
                                     type="number"
@@ -209,24 +239,116 @@ export default function AdminPage() {
                                     value={additionalFee}
                                     onChange={(e) => setAdditionalFee(parseFloat(e.target.value) || 0)}
                                     autoFocus
-                                    className="font-mono text-lg"
+                                    className="font-mono text-lg h-12"
                                 />
-                                <p className="text-xs text-zinc-500 mt-1">Wpisz 0, jeśli auto wróciło w stanie perfekcyjnym i o czasie.</p>
+                                <p className="text-xs text-slate-400 mt-1.5">Wpisz 0, jeśli auto wróciło w stanie perfekcyjnym i o czasie.</p>
                             </div>
-
-                            {returnError && <div className="text-red-600 bg-red-50 p-3 rounded-lg text-sm font-semibold">{returnError}</div>}
-                            {returnSuccess && <div className="text-green-600 bg-green-50 p-3 rounded-lg text-sm font-semibold">{returnSuccess}</div>}
-
-                            <div className="flex justify-end gap-3 mt-8 pt-4 border-t">
-                                <Button type="button" variant="outline" onClick={() => setSelectedRental(null)} disabled={isReturning}>Anuluj</Button>
-                                <Button type="submit" disabled={isReturning} className="bg-emerald-600 hover:bg-emerald-500">
-                                    {isReturning ? 'Zapisuję w DB...' : 'Zatwierdź Zwrot'}
+                            {returnError && <div className="text-red-600 bg-red-50 p-3 rounded-lg text-sm font-semibold border border-red-100">{returnError}</div>}
+                            {returnSuccess && <div className="text-emerald-700 bg-emerald-50 p-3 rounded-lg text-sm font-semibold border border-emerald-100">{returnSuccess}</div>}
+                            <div className="flex gap-3 mt-6 pt-5 border-t border-slate-100">
+                                <Button type="button" variant="outline" className="flex-1 cursor-pointer" onClick={() => setSelectedRental(null)} disabled={isReturning}>
+                                    Anuluj
+                                </Button>
+                                <Button type="submit" disabled={isReturning} className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors duration-150">
+                                    {isReturning ? 'Zapisuję...' : 'Zatwierdź Zwrot'}
                                 </Button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
-        </div>
+
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-black text-slate-900">Operacje na Wypożyczeniach</h1>
+                    <p className="text-slate-500 text-sm mt-0.5">{rentals.length} aktywnych wpisów</p>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
+                    {rentals.length === 0 ? (
+                        <div className="text-center py-20 text-slate-400">
+                            <Car className="w-10 h-10 mx-auto mb-3 text-slate-200" />
+                            Brak wypożyczeń do wyświetlenia.
+                        </div>
+                    ) : (
+                        <table className="w-full text-left text-sm">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-100">
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">ID / Klient</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Pojazd</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Termin</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Kwota</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                                    <th className="px-5 py-3.5 text-xs font-semibold text-slate-500 uppercase tracking-wider text-right">Akcja</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-50">
+                                {rentals.map(r => (
+                                    <tr key={r.Id} className="hover:bg-slate-50/70 transition-colors duration-100">
+                                        <td className="px-5 py-4">
+                                            <div className="font-bold text-slate-900">#RES-{r.Id}</div>
+                                            <div className="text-sm text-slate-600">{r.First_Name} {r.Last_Name}</div>
+                                            <div className="text-xs text-slate-400 font-mono">{r.Driving_License}</div>
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <div className="font-semibold text-slate-900">{r.Brand} {r.Model}</div>
+                                            <span className="text-xs font-mono bg-slate-100 text-slate-700 px-2 py-0.5 rounded tracking-wide">{r.License_Plate}</span>
+                                        </td>
+                                        <td className="px-5 py-4 text-xs text-slate-600">
+                                            <div>Od: {new Date(r.Start_Date).toLocaleDateString()}</div>
+                                            <div className="font-semibold text-red-500">Do: {new Date(r.End_Date).toLocaleDateString()}</div>
+                                            <div className="text-slate-400">Zwrot: {r.DropoffCity}</div>
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <div className="font-semibold text-slate-900">{r.Estimated_Cost} PLN</div>
+                                            {r.Final_Cost && <div className="text-xs text-emerald-600 font-bold mt-0.5">Finał: {r.Final_Cost} PLN</div>}
+                                        </td>
+                                        <td className="px-5 py-4">
+                                            <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_BADGES[r.Status] ?? 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
+                                                {STATUS_LABELS[r.Status] ?? r.Status}
+                                            </span>
+                                        </td>
+                                        <td className="px-5 py-4 text-right">
+                                            <div className="flex gap-2 justify-end">
+                                                {(r.Status === 'confirmed' || r.Status === 'pending_payment') && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        className="border-slate-200 text-slate-700 hover:bg-slate-50 cursor-pointer transition-colors duration-150"
+                                                        onClick={() => setIssueTarget(r)}
+                                                        disabled={isIssuing}
+                                                    >
+                                                        Wydaj pojazd
+                                                    </Button>
+                                                )}
+                                                {(r.Status === 'active' || r.Status === 'confirmed') && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors duration-150"
+                                                        onClick={() => { setSelectedRental(r); setAdditionalFee(0); }}
+                                                    >
+                                                        Przyjmij zwrot
+                                                    </Button>
+                                                )}
+                                                {(r.Status === 'pending_payment' || r.Status === 'confirmed') && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="bg-red-50 text-red-600 hover:bg-red-100 border border-red-200 cursor-pointer transition-colors duration-150"
+                                                        onClick={() => setCancelTarget(r)}
+                                                        disabled={isCancelling}
+                                                    >
+                                                        Anuluj
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    )}
+                </div>
+            </div>
+        </>
     );
 }
