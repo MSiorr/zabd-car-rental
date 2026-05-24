@@ -20,15 +20,24 @@ export async function POST(
 
         const conn = await pool.getConnection();
         try {
-            // Symulacja platnosci - z 'pending_payment' na 'confirmed'
-            const [result] = await conn.execute(
-                'UPDATE Reservations SET Status = ? WHERE Id = ? AND User_Id = ? AND Status = ?',
-                ['confirmed', id, session.userId, 'pending_payment']
+            const [[res]] = await conn.execute(
+                'SELECT Id, Estimated_Cost FROM Reservations WHERE Id = ? AND User_Id = ? AND Status = ?',
+                [id, session.userId, 'pending_payment']
             ) as any;
 
-            if (result.affectedRows === 0) {
+            if (!res) {
                 return NextResponse.json({ error: 'Nie można opłacić tej rezerwacji.' }, { status: 400 });
             }
+
+            await conn.execute(
+                'UPDATE Reservations SET Status = ? WHERE Id = ?',
+                ['confirmed', id]
+            );
+
+            await conn.execute(
+                'INSERT INTO Payments (Reservation_Id, Amount, Payment_Type) VALUES (?, ?, ?)',
+                [id, res.Estimated_Cost, 'Final']
+            );
 
             return NextResponse.json({ message: 'Płatność zakończona sukcesem', status: 'confirmed' });
         } finally {
