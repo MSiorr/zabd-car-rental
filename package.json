@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "db:logic": "dotenv -e .env.local -- cmd /c \"mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p%DB_PASSWORD% %DB_NAME% < sql/logic.sql\"",
-    "db:reset": "dotenv -e .env.local -- cmd /c \"mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p%DB_PASSWORD% %DB_NAME% < sql/tables.sql && mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p%DB_PASSWORD% %DB_NAME% < sql/data.sql && mysql -h %DB_HOST% -P %DB_PORT% -u %DB_USER% -p%DB_PASSWORD% %DB_NAME% < sql/logic.sql\""
+    "db:logic": "dotenv -e .env.local -- cmd /c \"mysql --default-character-set=utf8mb4 -h %DB_HOST% -P %DB_PORT% -u %DB_USER% --password=%DB_PASSWORD% %DB_NAME% < sql/logic.sql\"",
+    "db:reset": "dotenv -e .env.local -- cmd /c \"mysql --default-character-set=utf8mb4 -h %DB_HOST% -P %DB_PORT% -u %DB_USER% --password=%DB_PASSWORD% %DB_NAME% < sql/tables.sql && mysql --default-character-set=utf8mb4 -h %DB_HOST% -P %DB_PORT% -u %DB_USER% --password=%DB_PASSWORD% %DB_NAME% < sql/data.sql && mysql --default-character-set=utf8mb4 -h %DB_HOST% -P %DB_PORT% -u %DB_USER% --password=%DB_PASSWORD% %DB_NAME% < sql/logic.sql\""
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
