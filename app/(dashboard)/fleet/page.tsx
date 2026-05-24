@@ -14,22 +14,32 @@ interface Vehicle {
     branch_name: string;
     branch_city: string;
     main_image: string | null;
+    brand: string | null;
+    model: string | null;
+    fuel: string | null;
+    transmission: string | null;
 }
 
 export default function FleetPage() {
     const [vehicles, setVehicles] = useState<Vehicle[]>([]);
     const [cities, setCities] = useState<string[]>([]);
     const [categories, setCategories] = useState<string[]>([]);
+    const [brands, setBrands] = useState<string[]>([]);
+    const [fuels, setFuels] = useState<string[]>([]);
 
     const [selectedCity, setSelectedCity] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('');
+    const [selectedBrand, setSelectedBrand] = useState('');
+    const [selectedFuel, setSelectedFuel] = useState('');
     const [isLoading, setIsLoading] = useState(true);
 
     const fetchFleet = async () => {
         setIsLoading(true);
         const params = new URLSearchParams();
-        if (selectedCity) params.append('city', selectedCity);
+        if (selectedCity)     params.append('city', selectedCity);
         if (selectedCategory) params.append('category', selectedCategory);
+        if (selectedBrand)    params.append('brand', selectedBrand);
+        if (selectedFuel)     params.append('fuel', selectedFuel);
 
         try {
             const res = await fetch(`/api/vehicles?${params.toString()}`);
@@ -40,6 +50,8 @@ export default function FleetPage() {
                     setVehicles(data.vehicles);
                     setCities(data.meta?.cities || []);
                     setCategories(data.meta?.categories || []);
+                    setBrands(data.meta?.brands || []);
+                    setFuels(data.meta?.fuels || []);
                 } else {
                     // W razie gdyby API zwróciło starą strukturę
                     setVehicles(data as any);
@@ -54,7 +66,7 @@ export default function FleetPage() {
 
     useEffect(() => {
         fetchFleet();
-    }, [selectedCity, selectedCategory]);
+    }, [selectedCity, selectedCategory, selectedBrand, selectedFuel]);
 
     return (
         <div className="py-8 px-4">
@@ -65,28 +77,23 @@ export default function FleetPage() {
                 </div>
 
                 {/* Filtry */}
-                <div className="flex gap-4 w-full md:w-auto">
-                    <select
-                        value={selectedCity}
-                        onChange={(e) => setSelectedCity(e.target.value)}
-                        className="flex h-10 w-full md:w-48 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus:ring-2 focus:ring-blue-600 outline-none"
-                    >
-                        <option value="">Wszystkie miasta</option>
-                        {cities.map(city => (
-                            <option key={city} value={city}>{city}</option>
-                        ))}
-                    </select>
-
-                    <select
-                        value={selectedCategory}
-                        onChange={(e) => setSelectedCategory(e.target.value)}
-                        className="flex h-10 w-full md:w-48 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus-visible:outline-none focus:ring-2 focus:ring-blue-600 outline-none"
-                    >
-                        <option value="">Wszystkie kategorie</option>
-                        {categories.map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                    </select>
+                <div className="flex flex-wrap gap-3 w-full md:w-auto">
+                    {[
+                        { label: 'Wszystkie miasta',    value: selectedCity,     set: setSelectedCity,     opts: cities },
+                        { label: 'Wszystkie kategorie', value: selectedCategory, set: setSelectedCategory, opts: categories },
+                        { label: 'Wszystkie marki',     value: selectedBrand,    set: setSelectedBrand,    opts: brands },
+                        { label: 'Wszystkie paliwa',    value: selectedFuel,     set: setSelectedFuel,     opts: fuels },
+                    ].map(f => (
+                        <select
+                            key={f.label}
+                            value={f.value}
+                            onChange={e => f.set(e.target.value)}
+                            className="flex h-10 w-full md:w-44 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
+                        >
+                            <option value="">{f.label}</option>
+                            {f.opts.map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                    ))}
                 </div>
             </div>
 
@@ -115,8 +122,13 @@ export default function FleetPage() {
                                 <div className="flex justify-between items-start mb-4">
                                     <div>
                                         <h3 className="text-xl font-bold text-zinc-900 leading-tight">
-                                            {vehicle.category}
+                                            {vehicle.brand || vehicle.category} {vehicle.model || ''}
                                         </h3>
+                                        <div className="text-xs text-zinc-500 mt-1 flex items-center gap-2">
+                                            <span>{vehicle.category}</span>
+                                            {vehicle.fuel && <span>· {vehicle.fuel}</span>}
+                                            {vehicle.transmission && <span>· {vehicle.transmission}</span>}
+                                        </div>
                                         <div className="text-sm text-zinc-500 mt-1 flex items-center gap-1.5">
                                             <span className="text-blue-500">📍</span> {vehicle.branch_city} - {vehicle.branch_name}
                                         </div>

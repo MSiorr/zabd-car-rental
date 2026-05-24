@@ -10,6 +10,11 @@ interface Category { Id: number; Name: string; Base_Multiplier: string; }
 interface Branch { Id: number; Name: string; City: string; }
 interface Attribute { Id: number; Name: string; Type: string; }
 
+const ATTR_OPTIONS: Record<string, string[]> = {
+    'Skrzynia biegów': ['Manualna', 'Automatyczna'],
+    'Paliwo': ['Benzyna', 'Diesel', 'Hybryda', 'Elektryczny', 'LPG'],
+};
+
 interface VehicleFormProps {
     initialData?: {
         VIN: string;
@@ -95,6 +100,21 @@ export default function VehicleForm({ initialData, vehicleId }: VehicleFormProps
 
     const renderAttrInput = (attr: Attribute) => {
         const val = attrValues[attr.Id] ?? '';
+        const options = ATTR_OPTIONS[attr.Name];
+
+        if (options) {
+            return (
+                <select
+                    value={val}
+                    onChange={e => handleAttrChange(attr.Id, e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                    <option value="">Wybierz...</option>
+                    {options.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+            );
+        }
+
         switch (attr.Type) {
             case 'BOOLEAN':
                 return (
