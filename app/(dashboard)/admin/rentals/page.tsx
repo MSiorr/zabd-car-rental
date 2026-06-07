@@ -21,8 +21,23 @@ interface Rental {
     End_Date: string;
     Estimated_Cost: string;
     Final_Cost: string | null;
+    Outstanding: string;
     DropoffCity: string;
     DropoffBranchName: string;
+}
+
+interface DamageType {
+    Id: number;
+    Name: string;
+    Default_Cost: string;
+}
+
+interface DamageRow {
+    key: string;
+    damageTypeId: number | null;
+    description: string;
+    amount: number;
+    selected: boolean;
 }
 
 const STATUS_BADGES: Record<string, string> = {
@@ -49,7 +64,8 @@ export default function AdminRentalsPage() {
     const [issueTarget, setIssueTarget] = useState<Rental | null>(null);
     const [cancelTarget, setCancelTarget] = useState<Rental | null>(null);
     const [isCancelling, setIsCancelling] = useState(false);
-    const [additionalFee, setAdditionalFee] = useState<number>(0);
+    const [damageTypes, setDamageTypes] = useState<DamageType[]>([]);
+    const [damageRows, setDamageRows] = useState<DamageRow[]>([]);
     const [isReturning, setIsReturning] = useState(false);
     const [isIssuing, setIsIssuing] = useState(false);
     const [returnError, setReturnError] = useState('');
@@ -71,6 +87,59 @@ export default function AdminRentalsPage() {
     };
 
     useEffect(() => { fetchRentals(); }, []);
+
+    useEffect(() => {
+        fetch('/api/admin/damage-types')
+            .then(res => res.ok ? res.json() : [])
+            .then(data => { if (Array.isArray(data)) setDamageTypes(data); })
+            .catch(() => {});
+    }, []);
+
+    const openReturn = (r: Rental) => {
+        // Inicjalizujemy listę usterek ze słownika (odznaczone, z domyślną kwotą).
+        setDamageRows(damageTypes.map(dt => ({
+            key: `dt-${dt.Id}`,
+            damageTypeId: dt.Id,
+            description: dt.Name,
+            amount: Number(dt.Default_Cost),
+            selected: false,
+        })));
+        setReturnError('');
+        setReturnSuccess('');
+        setSelectedRental(r);
+    };
+
+    const toggleDamage = (key: string) => {
+        setDamageRows(rows => rows.map(row =>
+            row.key === key ? { ...row, selected: !row.selected } : row
+        ));
+    };
+
+    const setDamageAmount = (key: string, amount: number) => {
+        setDamageRows(rows => rows.map(row =>
+            row.key === key ? { ...row, amount } : row
+        ));
+    };
+
+    const addCustomDamage = () => {
+        setDamageRows(rows => [...rows, {
+            key: `custom-${Date.now()}`,
+            damageTypeId: null,
+            description: '',
+            amount: 0,
+            selected: true,
+        }]);
+    };
+
+    const setCustomDescription = (key: string, description: string) => {
+        setDamageRows(rows => rows.map(row =>
+            row.key === key ? { ...row, description } : row
+        ));
+    };
+
+    const damageTotal = damageRows
+        .filter(r => r.selected)
+        .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
 
     const confirmIssue = async () => {
         if (!issueTarget) return;
@@ -121,17 +190,26 @@ export default function AdminRentalsPage() {
         setReturnError('');
         setReturnSuccess('');
         try {
+            const damages = damageRows
+                .filter(r => r.selected && Number(r.amount) > 0)
+                .map(r => ({
+                    damageTypeId: r.damageTypeId,
+                    description: r.description || 'Uszkodzenie',
+                    amount: Number(r.amount),
+                }));
+
             const res = await fetch('/api/return', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ reservationId: selectedRental.Id, additionalFee })
+                body: JSON.stringify({ reservationId: selectedRental.Id, damages })
             });
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || 'Błąd zwrotu');
-            if (data.finalCost === null && data.message.includes('Błąd')) throw new Error(data.message);
-            setReturnSuccess(`Zwrócono pomyślnie! ${data.message} | Ostateczny koszt: ${data.finalCost} PLN`);
+            const lateMsg = Number(data.lateFee) > 0 ? ` | Kara za opóźnienie: ${Number(data.lateFee).toFixed(2)} PLN` : '';
+            const dmgMsg = Number(data.damageFee) > 0 ? ` | Uszkodzenia: ${Number(data.damageFee).toFixed(2)} PLN` : '';
+            setReturnSuccess(`Zwrot przyjęty! Koszt końcowy: ${Number(data.finalCost).toFixed(2)} PLN${lateMsg}${dmgMsg}`);
             fetchRentals();
-            setTimeout(() => { setSelectedRental(null); setReturnSuccess(''); }, 3000);
+            setTimeout(() => { setSelectedRental(null); setReturnSuccess(''); }, 4000);
         } catch (err: any) {
             setReturnError(err.message);
         } finally {
@@ -224,25 +302,67 @@ export default function AdminRentalsPage() {
                             </div>
                         </div>
                         <p className="text-sm text-slate-600 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-100 leading-relaxed">
-                            Sprawdź stan pojazdu. Opóźnienia liczą się automatycznie. Wpisz dodatkową kwotę tylko za uszkodzenia lub inne nieprzewidziane koszty.
+                            Kara za opóźnienie naliczy się automatycznie wg liczby dni po terminie. Zaznacz usterki ze słownika (kwoty można nadpisać). Naliczone koszty pojawią się u klienta jako kwota do dopłaty.
                         </p>
                         <form onSubmit={handleReturn} className="space-y-5">
                             <div>
-                                <Label htmlFor="additionalFee" className="mb-2 block font-semibold text-slate-700">
-                                    Dodatkowe opłaty (PLN)
+                                <Label className="mb-2 block font-semibold text-slate-700">
+                                    Protokół uszkodzeń
                                 </Label>
-                                <Input
-                                    id="additionalFee"
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    value={additionalFee}
-                                    onChange={(e) => setAdditionalFee(parseFloat(e.target.value) || 0)}
-                                    autoFocus
-                                    className="font-mono text-lg h-12"
-                                />
-                                <p className="text-xs text-slate-400 mt-1.5">Wpisz 0, jeśli auto wróciło w stanie perfekcyjnym i o czasie.</p>
+                                <div className="space-y-2 max-h-64 overflow-auto pr-1">
+                                    {damageRows.map(row => (
+                                        <div
+                                            key={row.key}
+                                            className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+                                                row.selected ? 'border-emerald-300 bg-emerald-50/50' : 'border-slate-200 bg-white'
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={row.selected}
+                                                onChange={() => toggleDamage(row.key)}
+                                                className="w-4 h-4 accent-emerald-600 cursor-pointer flex-shrink-0"
+                                            />
+                                            {row.damageTypeId === null ? (
+                                                <Input
+                                                    type="text"
+                                                    placeholder="Opis usterki..."
+                                                    value={row.description}
+                                                    onChange={(e) => setCustomDescription(row.key, e.target.value)}
+                                                    className="h-9 text-sm flex-1"
+                                                />
+                                            ) : (
+                                                <span className="text-sm text-slate-700 flex-1">{row.description}</span>
+                                            )}
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    value={row.amount}
+                                                    onChange={(e) => setDamageAmount(row.key, parseFloat(e.target.value) || 0)}
+                                                    disabled={!row.selected}
+                                                    className="h-9 w-24 text-sm font-mono text-right"
+                                                />
+                                                <span className="text-xs text-slate-400">PLN</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={addCustomDamage}
+                                    className="mt-2 text-sm text-slate-500 hover:text-slate-800 cursor-pointer underline underline-offset-2"
+                                >
+                                    + Dodaj inną pozycję
+                                </button>
                             </div>
+
+                            <div className="flex justify-between items-center bg-slate-50 px-4 py-3 rounded-xl border border-slate-100">
+                                <span className="text-sm font-semibold text-slate-600">Suma uszkodzeń do naliczenia</span>
+                                <span className="text-lg font-black text-slate-900 font-mono">{damageTotal.toFixed(2)} PLN</span>
+                            </div>
+
                             {returnError && <div className="text-red-600 bg-red-50 p-3 rounded-lg text-sm font-semibold border border-red-100">{returnError}</div>}
                             {returnSuccess && <div className="text-emerald-700 bg-emerald-50 p-3 rounded-lg text-sm font-semibold border border-emerald-100">{returnSuccess}</div>}
                             <div className="flex gap-3 mt-6 pt-5 border-t border-slate-100">
@@ -302,6 +422,9 @@ export default function AdminRentalsPage() {
                                         <td className="px-5 py-4">
                                             <div className="font-semibold text-slate-900">{r.Estimated_Cost} PLN</div>
                                             {r.Final_Cost && <div className="text-xs text-emerald-600 font-bold mt-0.5">Finał: {r.Final_Cost} PLN</div>}
+                                            {Number(r.Outstanding) > 0 && (
+                                                <div className="text-xs text-red-600 font-bold mt-0.5">Do dopłaty: {Number(r.Outstanding).toFixed(2)} PLN</div>
+                                            )}
                                         </td>
                                         <td className="px-5 py-4">
                                             <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${STATUS_BADGES[r.Status] ?? 'bg-slate-100 text-slate-600 border border-slate-200'}`}>
@@ -325,7 +448,7 @@ export default function AdminRentalsPage() {
                                                     <Button
                                                         size="sm"
                                                         className="bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer transition-colors duration-150"
-                                                        onClick={() => { setSelectedRental(r); setAdditionalFee(0); }}
+                                                        onClick={() => openReturn(r)}
                                                     >
                                                         Przyjmij zwrot
                                                     </Button>

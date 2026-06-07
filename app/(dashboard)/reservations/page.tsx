@@ -16,6 +16,8 @@ interface Reservation {
     End_Date: string;
     Status: string;
     Estimated_Cost: string;
+    Final_Cost: string | null;
+    Outstanding: string;
 }
 
 const STATUS_STYLES: Record<string, { cls: string; label: string }> = {
@@ -30,14 +32,34 @@ export default function ReservationsPage() {
     const [reservations, setReservations] = useState<Reservation[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [settlingId, setSettlingId] = useState<number | null>(null);
 
-    useEffect(() => {
+    const fetchReservations = () => {
         fetch('/api/reservations')
             .then(res => { if (!res.ok) throw new Error('Błąd pobierania rezerwacji'); return res.json(); })
             .then(data => setReservations(data))
             .catch(err => setError(err.message))
             .finally(() => setLoading(false));
-    }, []);
+    };
+
+    useEffect(() => { fetchReservations(); }, []);
+
+    const handleSettle = async (id: number) => {
+        setSettlingId(id);
+        setError('');
+        try {
+            // Symulacja bramki płatności dla dopłaty.
+            await new Promise(r => setTimeout(r, 1200));
+            const res = await fetch(`/api/reservations/${id}/settle`, { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || 'Błąd dopłaty');
+            fetchReservations();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSettlingId(null);
+        }
+    };
 
     if (loading) return (
         <div className="flex items-center justify-center py-32">
@@ -141,6 +163,25 @@ export default function ReservationsPage() {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {Number(res.Outstanding) > 0 && (
+                                            <div className="mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                                                <div className="flex items-center gap-2 text-sm">
+                                                    <CreditCard className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                    <span className="text-red-700">
+                                                        Naliczono dodatkowe koszty (kary/uszkodzenia).
+                                                        <span className="font-bold"> Do dopłaty: {Number(res.Outstanding).toFixed(2)} PLN</span>
+                                                    </span>
+                                                </div>
+                                                <Button
+                                                    onClick={() => handleSettle(res.Id)}
+                                                    disabled={settlingId === res.Id}
+                                                    className="bg-red-600 hover:bg-red-700 text-white font-bold h-10 cursor-pointer flex-shrink-0"
+                                                >
+                                                    {settlingId === res.Id ? 'Przetwarzanie...' : 'Dopłać teraz'}
+                                                </Button>
+                                            </div>
+                                        )}
 
                                         <div className="flex flex-col sm:flex-row gap-3">
                                             {res.Status === 'pending_payment' && (

@@ -4,7 +4,7 @@
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS Vehicle_Attribute, Vehicle_Images, Audit_Logs,
-  Payments, Reservations, Promotions, Maintenance_Log,
+  Reservation_Damages, Damage_Types, Payments, Reservations, Promotions, Maintenance_Log,
   Vehicles, Vehicle_Categories, Branches, Users, System_Config, Attributes;
 SET FOREIGN_KEY_CHECKS = 1;
 
@@ -100,10 +100,33 @@ CREATE TABLE Payments (
   Id              INT            NOT NULL AUTO_INCREMENT,
   Reservation_Id  INT            NOT NULL,
   Amount          DECIMAL(10,2)  NOT NULL,
-  Payment_Type    ENUM('Deposit','Final','Penalty') NOT NULL,
+  Payment_Type    ENUM('Deposit','Final','Penalty','Damage') NOT NULL,
+  Status          ENUM('pending','paid') NOT NULL DEFAULT 'paid',
+  Description     VARCHAR(255)   NOT NULL DEFAULT '',
   Payment_Date    DATETIME       NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (Id),
   CONSTRAINT fk_payment_res FOREIGN KEY (Reservation_Id) REFERENCES Reservations(Id)
+);
+
+-- Słownik usterek/kosztów dodatkowych (cennik bazowy, nadpisywalny przy zwrocie)
+CREATE TABLE Damage_Types (
+  Id           INT           NOT NULL AUTO_INCREMENT,
+  Name         VARCHAR(150)  NOT NULL,
+  Default_Cost DECIMAL(10,2) NOT NULL,
+  PRIMARY KEY (Id)
+);
+
+-- Uszkodzenia faktycznie naliczone przy konkretnym zwrocie
+CREATE TABLE Reservation_Damages (
+  Id              INT           NOT NULL AUTO_INCREMENT,
+  Reservation_Id  INT           NOT NULL,
+  Damage_Type_Id  INT           NULL,
+  Description     VARCHAR(255)  NOT NULL,
+  Amount          DECIMAL(10,2) NOT NULL,
+  Created_At      DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (Id),
+  CONSTRAINT fk_rd_res  FOREIGN KEY (Reservation_Id) REFERENCES Reservations(Id),
+  CONSTRAINT fk_rd_type FOREIGN KEY (Damage_Type_Id) REFERENCES Damage_Types(Id)
 );
 
 CREATE TABLE Audit_Logs (

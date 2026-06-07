@@ -27,7 +27,8 @@ export async function GET() {
                 b_dropoff.City as DropoffCity,
                 b_dropoff.Name as DropoffBranchName,
                 (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Marka') as Brand,
-                (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Model') as Model
+                (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Model') as Model,
+                (SELECT COALESCE(SUM(Amount), 0) FROM Payments p WHERE p.Reservation_Id = r.Id AND p.Status = 'pending') as Outstanding
              FROM Reservations r
              JOIN Vehicles v ON r.Vehicle_Id = v.Id
              JOIN Users u ON r.User_Id = u.Id

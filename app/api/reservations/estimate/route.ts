@@ -30,16 +30,46 @@ export async function GET(request: Request) {
             }
         }
 
-        const [[result]] = await pool.execute(
-            'SELECT calculate_final_rate(?, ?, ?, ?) AS cost',
+        // Procedura zwraca pojedynczy wiersz z rozbiciem ceny na składniki.
+        const [resultSets] = await pool.query(
+            'CALL calculate_rate_breakdown(?, ?, ?, ?)',
             [vehicleId, startDate, endDate, promoId]
         ) as any;
+        const b = resultSets[0][0];
 
-        const days = Math.max(1, Math.ceil(
-            (new Date(endDate).getTime() - new Date(startDate).getTime()) / (1000 * 3600 * 24)
-        ));
+        // Promo mogło zostać odrzucone w procedurze (np. za mało dni) — odzwierciedlamy to.
+        if (promoCode && promoApplied && !b.promo_applies) {
+            promoApplied = false;
+            promoError   = promoError || 'Kod wymaga dłuższego okresu najmu';
+        }
 
-        return NextResponse.json({ estimatedCost: result.cost, days, promoApplied, promoError });
+        const breakdown = {
+            basePrice:          Number(b.base_price),
+            category:           b.category,
+            categoryMultiplier: Number(b.category_multiplier),
+            dailyRate:          Number(b.daily_rate),
+            totalDays:          Number(b.total_days),
+            weekdayDays:        Number(b.weekday_days),
+            weekendDays:        Number(b.weekend_days),
+            weekendMultiplier:  Number(b.weekend_multiplier),
+            weekdayCost:        Number(b.weekday_cost),
+            weekendCost:        Number(b.weekend_cost),
+            seasonApplies:      !!b.season_applies,
+            seasonMultiplier:   Number(b.season_multiplier),
+            subtotal:           Number(b.subtotal),
+            promoApplies:       !!b.promo_applies,
+            discountPercent:    Number(b.discount_percent),
+            discountAmount:     Number(b.discount_amount),
+            total:              Number(b.total),
+        };
+
+        return NextResponse.json({
+            estimatedCost: breakdown.total,
+            days: breakdown.totalDays,
+            promoApplied,
+            promoError,
+            breakdown,
+        });
     } catch (error) {
         console.error(error);
         return NextResponse.json({ error: 'Błąd obliczania kosztu' }, { status: 500 });

@@ -35,8 +35,8 @@ export async function POST(
             );
 
             await conn.execute(
-                'INSERT INTO Payments (Reservation_Id, Amount, Payment_Type) VALUES (?, ?, ?)',
-                [id, res.Estimated_Cost, 'Final']
+                "INSERT INTO Payments (Reservation_Id, Amount, Payment_Type, Status, Description) VALUES (?, ?, 'Final', 'paid', 'Opłata za wynajem')",
+                [id, res.Estimated_Cost]
             );
 
             return NextResponse.json({ message: 'Płatność zakończona sukcesem', status: 'confirmed' });
