@@ -14,16 +14,17 @@ export async function GET() {
         }
 
         const [rows] = await pool.execute(
-            `SELECT 
-                r.*, 
-                v.License_Plate, 
+            `SELECT
+                r.*,
+                v.License_Plate,
                 b.City as PickupCity,
                 (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Marka') as Brand,
-                (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Model') as Model
+                (SELECT Value_String FROM Vehicle_Attribute va JOIN Attributes a ON va.Attribute_Id = a.Id WHERE va.Vehicle_Id = v.Id AND a.Name = 'Model') as Model,
+                (SELECT COALESCE(SUM(Amount), 0) FROM Payments p WHERE p.Reservation_Id = r.Id AND p.Status = 'pending') as Outstanding
              FROM Reservations r
              JOIN Vehicles v ON r.Vehicle_Id = v.Id
              JOIN Branches b ON r.PickUp_Branch_Id = b.Id
-             WHERE r.User_Id = ? 
+             WHERE r.User_Id = ?
              ORDER BY r.Created_At DESC`,
             [session.userId]
         );

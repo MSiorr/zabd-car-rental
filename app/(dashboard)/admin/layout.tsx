@@ -2,11 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Car } from 'lucide-react';
+import { LayoutDashboard, Car, BarChart3, FlaskConical } from 'lucide-react';
 
 const navItems = [
     { href: '/admin/rentals', label: 'Wypożyczenia', icon: LayoutDashboard },
     { href: '/admin/vehicles', label: 'Zarządzanie Flotą', icon: Car },
+    { href: '/admin/report', label: 'Podsumowanie miesięczne', icon: BarChart3 },
+    { href: '/admin/system', label: 'Symulacja systemu', icon: FlaskConical },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

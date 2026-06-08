@@ -23,6 +23,26 @@ interface Vehicle {
     [key: string]: any;
 }
 
+interface Breakdown {
+    basePrice: number;
+    category: string;
+    categoryMultiplier: number;
+    dailyRate: number;
+    totalDays: number;
+    weekdayDays: number;
+    weekendDays: number;
+    weekendMultiplier: number;
+    weekdayCost: number;
+    weekendCost: number;
+    seasonApplies: boolean;
+    seasonMultiplier: number;
+    subtotal: number;
+    promoApplies: boolean;
+    discountPercent: number;
+    discountAmount: number;
+    total: number;
+}
+
 export default function NewReservationPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -43,6 +63,7 @@ export default function NewReservationPage() {
     const [loading, setLoading] = useState(false);
     const [estimatedDays, setEstimatedDays] = useState(0);
     const [estimatedCost, setEstimatedCost] = useState<number | null>(null);
+    const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
     const [estimateLoading, setEstimateLoading] = useState(false);
     const [promoStatus, setPromoStatus] = useState<'idle' | 'valid' | 'invalid'>('idle');
     const [promoError, setPromoError] = useState('');
@@ -81,6 +102,7 @@ export default function NewReservationPage() {
         if (!vehicleId || !startDate || !endDate) {
             setEstimatedDays(0);
             setEstimatedCost(null);
+            setBreakdown(null);
             setPromoStatus('idle');
             setPromoError('');
             return;
@@ -100,6 +122,7 @@ export default function NewReservationPage() {
                 if (data.estimatedCost !== undefined) {
                     setEstimatedCost(parseFloat(data.estimatedCost));
                     setEstimatedDays(data.days);
+                    setBreakdown(data.breakdown ?? null);
                     if (debouncedPromo) {
                         setPromoStatus(data.promoApplied ? 'valid' : 'invalid');
                         setPromoError(data.promoError || '');
@@ -297,22 +320,65 @@ export default function NewReservationPage() {
                                     </div>
                                 </div>
 
-                                <div className="space-y-2 text-sm mb-5 px-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="text-slate-500">Liczba dni:</span>
-                                        <span className="font-semibold text-slate-900">{estimatedDays || '—'}</span>
-                                    </div>
-                                    {promoStatus === 'valid' && (
-                                        <div className="flex justify-between items-center text-emerald-600">
-                                            <span>Kod promocyjny:</span>
-                                            <span className="font-semibold">{promoCode} ✓</span>
+                                {breakdown ? (
+                                    <div className="space-y-2.5 text-sm mb-5 px-1">
+                                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Jak liczymy cenę</p>
+
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500">Cena bazowa</span>
+                                            <span className="font-medium text-slate-700">{breakdown.basePrice.toFixed(2)} PLN/dzień</span>
                                         </div>
-                                    )}
-                                    <div className="flex justify-between items-center text-slate-400">
-                                        <span>Podatki i opłaty:</span>
-                                        <span>wliczone</span>
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500">
+                                                Kategoria <span className="font-medium text-slate-700">{breakdown.category}</span>
+                                                <span className="text-slate-400"> (×{breakdown.categoryMultiplier})</span>
+                                            </span>
+                                            <span className="font-medium text-slate-700">{breakdown.dailyRate.toFixed(2)} PLN/dzień</span>
+                                        </div>
+
+                                        <div className="border-t border-slate-100 pt-2 mt-1 space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-slate-500">
+                                                    Dni robocze: {breakdown.weekdayDays} × {breakdown.dailyRate.toFixed(2)}
+                                                </span>
+                                                <span className="font-medium text-slate-700">{breakdown.weekdayCost.toFixed(2)} PLN</span>
+                                            </div>
+                                            {breakdown.weekendDays > 0 && (
+                                                <div className="flex justify-between items-center">
+                                                    <span className="text-slate-500">
+                                                        Weekend: {breakdown.weekendDays} × {breakdown.dailyRate.toFixed(2)}
+                                                        <span className="text-amber-600"> ×{breakdown.weekendMultiplier}</span>
+                                                    </span>
+                                                    <span className="font-medium text-slate-700">{breakdown.weekendCost.toFixed(2)} PLN</span>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {breakdown.seasonApplies && (
+                                            <div className="flex justify-between items-center text-amber-600 border-t border-slate-100 pt-2">
+                                                <span>Sezon wysoki (×{breakdown.seasonMultiplier})</span>
+                                                <span className="font-semibold">+{(breakdown.subtotal - breakdown.weekdayCost - breakdown.weekendCost).toFixed(2)} PLN</span>
+                                            </div>
+                                        )}
+
+                                        {breakdown.promoApplies && (
+                                            <div className="flex justify-between items-center text-emerald-600 border-t border-slate-100 pt-2">
+                                                <span>Rabat {promoCode} (−{breakdown.discountPercent}%)</span>
+                                                <span className="font-semibold">−{breakdown.discountAmount.toFixed(2)} PLN</span>
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
+                                ) : (
+                                    <div className="space-y-2 text-sm mb-5 px-1">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-slate-500">Liczba dni:</span>
+                                            <span className="font-semibold text-slate-900">{estimatedDays || '—'}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-slate-400">
+                                            <span>Wybierz daty, aby zobaczyć wycenę</span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 <div className="pt-4 border-t-2 border-dashed border-slate-200">
                                     <div className="flex justify-between items-end">

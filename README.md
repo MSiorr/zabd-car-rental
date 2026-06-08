@@ -1,5 +1,22 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Baza danych (MySQL)
+
+Skopiuj `.env.example` → `.env.local` i uzupełnij dane MySQL + 32-znakowy `NEXTAUTH_SECRET`.
+
+> **Wymóg jednorazowy:** `sql/logic.sql` tworzy funkcje i procedury składowane. Przy włączonym binary logu MySQL wymaga do tego uprawnienia, którego konto aplikacyjne (`caruser`) nie ma. Ustaw raz globalnie (przetrwa restart serwera dzięki `SET PERSIST`):
+>
+> ```bash
+> mysql -u root -p -e "SET PERSIST log_bin_trust_function_creators = 1;"
+> ```
+>
+> W przeciwnym razie `pnpm db:reset` przerwie z błędem `ERROR 1419 (HY000) ... SUPER privilege`.
+
+```bash
+pnpm db:reset   # tabele → dane → logika (procedury, triggery, widoki, event)
+pnpm db:logic   # przeładuj samą logikę (bezpieczne, używa DROP/CREATE OR REPLACE)
+```
+
 ## Getting Started
 
 First, run the development server:
